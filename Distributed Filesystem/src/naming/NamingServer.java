@@ -296,13 +296,56 @@ public class NamingServer implements Service, Registration
 	@Override
 	public void lock(Path path, boolean exclusive) throws RMIException,
 			FileNotFoundException {
-		// TODO Auto-generated method stub
+		
+		if (path == null) {
+			throw new NullPointerException("Null Argument given!");
+		}
+		
+		// This'll throw the FileNotFoundException if it doesn't find the file
+		this.dirTree.extract(path);
+		
+		// Create a global list for the locks
+		ArrayList<Request> lockList = new ArrayList<Request>();
+		
+		synchronized (this.dirTree) {
+			// Based on the assumption that the last  
+			// component is a leaf and the rest are nodes
+			Node currNode = this.dirTree;
+			String pathAcc = "/";
+			for (String pComp : path.pComps) {
+				// If no one is waiting with an exclusive lock to this Node,
+				// and this node is readable then add a lock to the global list
+				if (!currNode.writePending() && currNode.getNumReaders() != -1) {
+					Request tempLock = new Request(true);
+					lockList.add(tempLock);
+					// Also add 1 to the number of readers :P
+					currNode.addToNumReaders(1);
+				} 
+				// Else no one can't read from the currNode, so we make a 
+				// new lock and add it to the queue of locks
+				else {
+					Request r = new Request(exclusive,Thread.currentThread());
+					currNode.lockQueue.add(r);
+					Request tempLock = new Request(true);
+					lockList.add(tempLock);
+				}
+				
+				pathAcc+=pComp;
+				Path currPath = new Path(pathAcc);
+				currNode = (Node) this.dirTree.extract(currPath);
+			}
+			
+			// Now we need to handle the last component of the path.
+			// We need to make sure that the reads and the writes are done in order
+			
+			
+		}
+		// Here we check if we got any non-exclusive locks 
 		
 	}
 
 	@Override
 	public void unlock(Path path, boolean exclusive) throws RMIException {
-		// TODO Auto-generated method stub
 		
 	}
 }
