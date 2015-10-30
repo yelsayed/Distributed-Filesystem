@@ -36,7 +36,7 @@ public abstract class Tree {
 	}
 	
 	public int getNumReaders() {
-		return this.getNumReaders();
+		return this.numReaders;
 	}
 	
 	public void addToNumReaders(int i) {

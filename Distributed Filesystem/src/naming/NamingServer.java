@@ -296,7 +296,7 @@ public class NamingServer implements Service, Registration
 	@Override
 	public void lock(Path path, boolean exclusive) throws RMIException,
 			FileNotFoundException {
-		
+		// Error checking
 		if (path == null) {
 			throw new NullPointerException("Null Argument given!");
 		}
@@ -307,10 +307,11 @@ public class NamingServer implements Service, Registration
 		// Create a global list for the locks
 		ArrayList<Request> lockList = new ArrayList<Request>();
 		
-		synchronized (this.dirTree) {
+		Node currNode = this.dirTree;
+		
+		synchronized (currNode) {
 			// Based on the assumption that the last  
 			// component is a leaf and the rest are nodes
-			Node currNode = this.dirTree;
 			String pathAcc = "/";
 			for (String pComp : path.pComps) {
 				// If no one is waiting with an exclusive lock to this Node,
@@ -326,7 +327,7 @@ public class NamingServer implements Service, Registration
 				else {
 					Request r = new Request(exclusive,Thread.currentThread());
 					currNode.lockQueue.add(r);
-					Request tempLock = new Request(true);
+					Request tempLock = new Request(r.hasAccess());
 					lockList.add(tempLock);
 				}
 				
@@ -338,14 +339,73 @@ public class NamingServer implements Service, Registration
 			// Now we need to handle the last component of the path.
 			// We need to make sure that the reads and the writes are done in order
 			
-			
+			// If NO write requests waiting AND lock IS exclusive AND numreaders is 0
+			if (currNode.getNumReaders() == 0 && exclusive && !currNode.writePending()) {
+				int readers = currNode.getNumReaders();
+				currNode.addToNumReaders(-readers-1);
+				Request tempLock = new Request(true);
+				lockList.add(tempLock);
+			}
+			// Else if NO write requests waiting AND lock is NOT exclusive AND numreaders is -1
+			if (currNode.getNumReaders() == -1 && !exclusive && !currNode.writePending()) {
+				currNode.addToNumReaders(1);
+				Request tempLock = new Request(true);
+				lockList.add(tempLock);
+			} else {
+				Request r = new Request(exclusive,Thread.currentThread());
+				currNode.lockQueue.add(r);
+				Request tempLock = new Request(r.hasAccess());
+				lockList.add(tempLock);
+			}
 		}
-		// Here we check if we got any non-exclusive locks 
-		
+		// Here we check if we got any non-exclusive locks in our list
+		for(Request r : lockList) {
+			if(r.isExcLock() == false) {
+				try {
+					Thread.sleep(100);
+				} catch (InterruptedException e) {
+					System.out.println("Error forcing the thread to sleep!");
+				}
+			}
+		}
 	}
 
 	@Override
 	public void unlock(Path path, boolean exclusive) throws RMIException {
+		// Error checking
+		if (path == null) {
+			throw new NullPointerException("Null Argument given!");
+		}
+		
+		// This'll throw the FileNotFoundException if it doesn't find the file
+		try {
+			this.dirTree.extract(path);
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+		
+		
+		synchronized (this.dirTree) {
+			Node currNode = this.dirTree;
+			String pathAcc = "";
+			for(String pComp : path.pComps) {
+				
+				// Subtract one reader from the current node
+				currNode.addToNumReaders(-1);
+				
+				// Add One to the readers of this file; this is for replication
+				
+				
+				pathAcc+=pComp;
+				Path currPath = new Path(pathAcc);
+				
+				try {
+					currNode = (Node) this.dirTree.extract(currPath);
+				} catch (FileNotFoundException e) {
+					e.printStackTrace();
+				}
+			}
+		}
 		
 	}
 }

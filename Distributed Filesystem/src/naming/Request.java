@@ -28,6 +28,10 @@ public class Request {
 		this.hasAccess = false;
 	}
 	
+	public boolean hasAccess() {
+		return this.hasAccess;
+	}
+	
 	public boolean isExcLock() {
 		return this.exclusive;
 	}
