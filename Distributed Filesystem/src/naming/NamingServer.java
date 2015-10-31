@@ -4,7 +4,10 @@ import java.io.*;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import rmi.*;
 import common.*;
@@ -40,6 +43,8 @@ public class NamingServer implements Service, Registration
 	Node dirTree;
 	public ArrayList<Command> commandStubList;
 	public HashMap<Command, Storage> commandStorageMap;
+	public HashMap<Storage, Command> storageCommandMap;
+	public HashMap<Path, Set<Storage>> pathStorageSetMap;
 	
     /** Creates the naming server object.
 
@@ -54,6 +59,8 @@ public class NamingServer implements Service, Registration
     	this.dirTree = new Node("/",new Path());
     	this.commandStubList = new ArrayList<Command>();
     	this.commandStorageMap = new HashMap<Command, Storage>();
+    	this.pathStorageSetMap = new HashMap<Path, Set<Storage>>();
+    	this.storageCommandMap = new HashMap<Storage, Command>();
     	
     	servSkeleton = new Skeleton<Service>(Service.class, this, serviceAdd);
     	regSkeleton = new Skeleton<Registration>(Registration.class, this, regisAdd);
@@ -278,6 +285,7 @@ public class NamingServer implements Service, Registration
     	
     	this.commandStubList.add(command_stub);
     	this.commandStorageMap.put(command_stub, client_stub);
+    	this.storageCommandMap.put(client_stub, command_stub);
     	
     	ArrayList<Path> duplicatePaths = new ArrayList<Path>();
     	Path[] dummyArray = new Path[0];
@@ -286,6 +294,14 @@ public class NamingServer implements Service, Registration
         	boolean created = dirTree.addRegistration(p, command_stub, client_stub);
         	if (created == false) {
         		duplicatePaths.add(p);
+        	} else {
+        		if (pathStorageSetMap.containsKey(p)) {
+        			pathStorageSetMap.get(p).add(client_stub);
+        		} else {
+        			Set<Storage> ss = new HashSet<Storage>();
+        			ss.add(client_stub);
+        			pathStorageSetMap.put(p, ss);
+        		}
         	}
         	
         }
@@ -400,6 +416,10 @@ public class NamingServer implements Service, Registration
 			throw new IllegalArgumentException("File not Found!!");
 		}
 		
+		Set<Storage> storageSet = pathStorageSetMap.get(path);
+		Path fileCopy = null;
+		Storage chosenStorage = null;
+		
 		synchronized (this.dirTree) {
 			Tree currNode = this.dirTree;
 			String pathAcc = "";
@@ -412,7 +432,7 @@ public class NamingServer implements Service, Registration
 				currNode.numReaders--;
 			
 				// Add One to the readers of this file; this is for replication
-				currNode.numReads++;
+				this.dirTree.numReads++;
 				
 				// If we reach a point when no one is reading from this node,
 				// then we should handle more requests
@@ -440,13 +460,51 @@ public class NamingServer implements Service, Registration
 			// for unlocking the nodes above...
 			else if (!exclusive){
 				currNode.numReaders -= 1;
-				currNode.numReads++;
+				this.dirTree.numReads++;
 				if (currNode.numReaders == 0) {
 					currNode.handleRequests();
 				}
-			}	
+			}
+			
+			if(currNode.getPath() != null && this.dirTree.numReads >= 20) {
+				this.dirTree.numReads = 0;
+				fileCopy = currNode.getPath();
+			}
 		}
-		
-		
+		// Copying
+		if (exclusive && storageSet != null) {
+			// Kind of a hack, but it works!
+			chosenStorage = storageSet.iterator().next();
+			storageSet.remove(chosenStorage);
+			for(Storage s : storageSet) {
+				Command cmd = this.storageCommandMap.get(s);
+				cmd.delete(path);
+			}
+			
+			if (chosenStorage != null) {
+				Set<Storage> updatedStorage = new HashSet<Storage>();
+				updatedStorage.add(chosenStorage);
+				pathStorageSetMap.put(path, updatedStorage);
+			} else {
+				System.out.println("Chosen Storage is null!!");
+			}
+			
+		} else if (!exclusive && fileCopy != null) {
+			// Kind of a hack, but it works!
+			chosenStorage = storageSet.iterator().next();
+			for (Storage s : storageCommandMap.keySet()) {
+				if (!storageSet.contains(s)) {
+					Command cmd = storageCommandMap.get(s);
+					try {
+						cmd.copy(fileCopy, chosenStorage);
+					} catch (IOException e) {
+//						e.printStackTrace();
+						System.out.println("Error copying stuff");
+					}
+					pathStorageSetMap.get(fileCopy).add(s);
+					break;
+				}
+			}
+		}		
 	}
 }

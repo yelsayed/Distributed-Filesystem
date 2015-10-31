@@ -55,7 +55,7 @@ public class ConformanceTests
                          conformance.naming.LockTest.class,
                          conformance.naming.QueueTest.class,
                          conformance.naming.ReplicationTest.class,
-//                         conformance.naming.DeletionTest.class
+                         conformance.naming.DeletionTest.class
                          };
         Series                      series = new Series(tests);
         SeriesReport                report = series.run(3, System.out);
