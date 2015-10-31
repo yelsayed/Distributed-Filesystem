@@ -331,6 +331,7 @@ public class NamingServer implements Service, Registration
 					lockList.add(tempLock);
 				}
 				
+				// Get next node
 				pathAcc+=pComp;
 				Path currPath = new Path(pathAcc);
 				currNode = (Node) this.dirTree.extract(currPath);
@@ -341,8 +342,7 @@ public class NamingServer implements Service, Registration
 			
 			// If NO write requests waiting AND lock IS exclusive AND numreaders is 0
 			if (currNode.getNumReaders() == 0 && exclusive && !currNode.writePending()) {
-				int readers = currNode.getNumReaders();
-				currNode.addToNumReaders(-readers-1);
+				currNode.numReaders--;
 				Request tempLock = new Request(true);
 				lockList.add(tempLock);
 			}
@@ -389,13 +389,23 @@ public class NamingServer implements Service, Registration
 			Node currNode = this.dirTree;
 			String pathAcc = "";
 			for(String pComp : path.pComps) {
+
+				// Assuming all the locks on the nodes are non exclusive
+				// then treat them like non exclusive locks
 				
 				// Subtract one reader from the current node
-				currNode.addToNumReaders(-1);
-				
+				currNode.numReaders--;
+			
 				// Add One to the readers of this file; this is for replication
+				currNode.numReads++;
 				
+				// If we reach a point when no one is reading from this node,
+				// then we should handle more requests
+				if (currNode.numReaders == 0) {
+					currNode.handleRequests();
+				}
 				
+				// Get next Node
 				pathAcc+=pComp;
 				Path currPath = new Path(pathAcc);
 				
@@ -405,6 +415,22 @@ public class NamingServer implements Service, Registration
 					e.printStackTrace();
 				}
 			}
+			// Unlocking an exclusive lock, reset the number of readers
+			// and handle more requests
+			if (exclusive) {
+				currNode.numReaders = 0;
+				currNode.handleRequests();
+			} 
+			// Unlocking a non exclusive lock, then do the same thing we did
+			// for unlocking the nodes above...
+			else if (!exclusive){
+				currNode.numReaders -= 1;
+				currNode.numReads++;
+				if (currNode.numReaders == 0) {
+					currNode.handleRequests();
+				}
+			}
+			
 		}
 		
 	}
