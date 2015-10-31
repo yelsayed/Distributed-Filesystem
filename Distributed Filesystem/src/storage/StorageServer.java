@@ -141,7 +141,7 @@ public class StorageServer implements Storage, Command
         }
         
         if (offset < 0 || length < 0 || length + offset > f.length()) {
-        	throw new IndexOutOfBoundsException("Offset and length are out of bounds"
+        	throw new IndexOutOfBoundsException("Offset and length are out of bounds "
         			+ "given the length of the file or they are negative!");
         }
         
@@ -217,13 +217,61 @@ public class StorageServer implements Storage, Command
     @Override
     public synchronized boolean delete(Path path)
     {
-        throw new UnsupportedOperationException("not implemented");
+        File f = path.toFile(root);
+        
+        // Cannot delete root so return false
+        if (path.isRoot()) {
+        	return false;
+        }
+        
+        if (f.isFile()) {
+        	return f.delete();
+        } else {
+        	File[] fileList = f.listFiles();
+        	
+        	if (fileList != null) {
+        		for (File f1 : fileList) {
+        			if(deleteDir(f1) == false){
+        				return false;
+        			}
+            	}
+        	}	
+    		return f.delete();
+        }
+    }
+    
+    private boolean deleteDir(File f) {
+    	File[] fileList = f.listFiles();
+    	
+    	if (fileList != null) {
+    		for (File f1 : fileList) {
+    			if(deleteDir(f1) == false){
+    				return false;
+    			}
+        	}
+    	}	
+		return f.delete();
     }
 
 	@Override
 	public boolean copy(Path file, Storage server) throws RMIException,
 			FileNotFoundException, IOException {
-		// TODO Auto-generated method stub
-		return false;
+		File f = file.toFile(root);
+		long fileSize = server.size(file);
+		byte[] bytesToCopy;
+		int readby = Integer.MAX_VALUE;
+		
+		if (f.exists()) {
+			f.delete();
+		}
+		create(file);
+		
+		for(long offset = 0; offset < fileSize; offset+=readby) {
+			readby = (int) Math.min(readby, fileSize-offset);
+			bytesToCopy = server.read(file, offset, readby);
+			write(file, offset, bytesToCopy);
+		}
+		
+		return true;
 	}
 }

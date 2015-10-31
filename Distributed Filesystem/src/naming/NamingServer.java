@@ -305,69 +305,85 @@ public class NamingServer implements Service, Registration
 		this.dirTree.extract(path);
 		
 		// Create a global list for the locks
-		ArrayList<Request> lockList = new ArrayList<Request>();
+		ArrayList<DynamicBoolean> lockList = new ArrayList<DynamicBoolean>();
 		
-		Node currNode = this.dirTree;
-		
-		synchronized (currNode) {
+		synchronized (this.dirTree) {
+			Tree currNode = this.dirTree;
 			// Based on the assumption that the last  
 			// component is a leaf and the rest are nodes
-			String pathAcc = "/";
+			String pathAcc = "";
+			System.out.println("Before loop!!!");
 			for (String pComp : path.pComps) {
+				System.out.println("In loop!!!!");
 				// If no one is waiting with an exclusive lock to this Node,
 				// and this node is readable then add a lock to the global list
-				if (!currNode.writePending() && currNode.getNumReaders() != -1) {
-					Request tempLock = new Request(true);
+				if (!this.dirTree.writePending() && currNode.getNumReaders() != -1) {
+					DynamicBoolean tempLock = new DynamicBoolean(true);
 					lockList.add(tempLock);
 					// Also add 1 to the number of readers :P
-					currNode.addToNumReaders(1);
+					currNode.numReaders++;
 				} 
 				// Else no one can't read from the currNode, so we make a 
 				// new lock and add it to the queue of locks
 				else {
 					Request r = new Request(exclusive,Thread.currentThread());
 					currNode.lockQueue.add(r);
-					Request tempLock = new Request(r.hasAccess());
-					lockList.add(tempLock);
+					lockList.add(r.hasAccess());
 				}
 				
 				// Get next node
-				pathAcc+=pComp;
+				pathAcc+="/"+pComp;
 				Path currPath = new Path(pathAcc);
-				currNode = (Node) this.dirTree.extract(currPath);
+				System.out.println(pathAcc);
+				currNode = this.dirTree.extract(currPath);
 			}
+			System.out.println("After loop!!!!");
 			
 			// Now we need to handle the last component of the path.
 			// We need to make sure that the reads and the writes are done in order
 			
 			// If NO write requests waiting AND lock IS exclusive AND numreaders is 0
-			if (currNode.getNumReaders() == 0 && exclusive && !currNode.writePending()) {
+			if (currNode.getNumReaders() == 0 && exclusive && !this.dirTree.writePending()) {
+				System.out.println("In First CASE!!!!");
 				currNode.numReaders--;
-				Request tempLock = new Request(true);
+				DynamicBoolean tempLock = new DynamicBoolean(true);
 				lockList.add(tempLock);
 			}
-			// Else if NO write requests waiting AND lock is NOT exclusive AND numreaders is -1
-			if (currNode.getNumReaders() == -1 && !exclusive && !currNode.writePending()) {
+			// Else if NO write requests waiting AND lock is NOT exclusive AND numreaders is not -1
+			else if (currNode.getNumReaders() != -1 && !exclusive && !this.dirTree.writePending()) {
+				System.out.println("In Second CASE!!!!");
 				currNode.addToNumReaders(1);
-				Request tempLock = new Request(true);
+				DynamicBoolean tempLock = new DynamicBoolean(true);
 				lockList.add(tempLock);
 			} else {
+				System.out.println("In LAST CASE!!!!");
 				Request r = new Request(exclusive,Thread.currentThread());
 				currNode.lockQueue.add(r);
-				Request tempLock = new Request(r.hasAccess());
-				lockList.add(tempLock);
+				lockList.add(r.hasAccess());
 			}
 		}
+		
+		DynamicBoolean fReq = new DynamicBoolean(false);
+		System.out.println(lockList);
 		// Here we check if we got any non-exclusive locks in our list
-		for(Request r : lockList) {
-			if(r.isExcLock() == false) {
-				try {
-					Thread.sleep(100);
-				} catch (InterruptedException e) {
-					System.out.println("Error forcing the thread to sleep!");
-				}
+		while(lockList.contains(fReq)) {
+			try {
+				Thread.currentThread();
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				System.out.println("Error forcing the thread to sleep!");
 			}
 		}
+		
+//		for(Request r : lockList) {
+//			if (!r.isExcLock()) {
+//				try {
+//					Thread.sleep(100);
+//				} catch (InterruptedException e) {
+//					System.out.println("Error forcing the thread to sleep!");
+//				}
+//			}
+//		}
 	}
 
 	@Override
@@ -381,12 +397,11 @@ public class NamingServer implements Service, Registration
 		try {
 			this.dirTree.extract(path);
 		} catch (FileNotFoundException e) {
-			e.printStackTrace();
+			throw new IllegalArgumentException("File not Found!!");
 		}
 		
-		
 		synchronized (this.dirTree) {
-			Node currNode = this.dirTree;
+			Tree currNode = this.dirTree;
 			String pathAcc = "";
 			for(String pComp : path.pComps) {
 
@@ -406,11 +421,11 @@ public class NamingServer implements Service, Registration
 				}
 				
 				// Get next Node
-				pathAcc+=pComp;
+				pathAcc+="/"+pComp;
 				Path currPath = new Path(pathAcc);
 				
 				try {
-					currNode = (Node) this.dirTree.extract(currPath);
+					currNode = this.dirTree.extract(currPath);
 				} catch (FileNotFoundException e) {
 					e.printStackTrace();
 				}
@@ -429,9 +444,9 @@ public class NamingServer implements Service, Registration
 				if (currNode.numReaders == 0) {
 					currNode.handleRequests();
 				}
-			}
-			
+			}	
 		}
+		
 		
 	}
 }

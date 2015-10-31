@@ -78,16 +78,24 @@ public class LockTest extends NamingTest
     protected void perform() throws TestFailed
     {
         testBadPaths();
-
+        System.out.println("Sharing1...");
         testSharing(root, false, root, false);
+        System.out.println("Sharing2...");
         testSharing(file1, true, file2, true);
+        System.out.println("Sharing3...");
         testSharing(file1, true, directory, false);
-
+        
+        System.out.println("Exclusion1...");
         testExclusion(root, false, root, true);
+        System.out.println("Exclusion2...");
         testExclusion(root, true, root, false);
+        System.out.println("Exclusion3...");
         testExclusion(root, true, root, true);
+        System.out.println("Exclusion4...");
         testExclusion(root, true, directory, false);
+        System.out.println("Exclusion5...");
         testExclusion(directory, false, root, true);
+        System.out.println("Exclusion6...");
         testExclusion(directory, true, root, true);
     }
 
