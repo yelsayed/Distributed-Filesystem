@@ -1,14 +1,10 @@
 package naming;
 
 public class DynamicBoolean {
-	private boolean mainBool;
+	public boolean mainBool;
 	
 	public DynamicBoolean(boolean b) {
 		this.mainBool = b;
-	}
-	
-	public boolean getBool() {
-		return mainBool;
 	}
 	
 	//setter for the boolean attribute
@@ -17,8 +13,7 @@ public class DynamicBoolean {
 	}
 	
 	public boolean equals(Object o) {
-		System.out.println("this is: " + this.mainBool + " compared with " +  ((DynamicBoolean)o).getBool());
-		return mainBool == ((DynamicBoolean)o).getBool();
+		return mainBool == ((DynamicBoolean)o).mainBool;
 	}
 	
 	public String toString() {

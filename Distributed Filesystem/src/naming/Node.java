@@ -2,6 +2,9 @@ package naming;
 
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 
 import storage.Command;
 import storage.Storage;
@@ -10,33 +13,32 @@ import common.Path;
 public class Node extends Tree {
 
 	public ArrayList<Tree> files;
-	
+
 	public Node(String name, Path p) {
-		super(name,p);
+		super(name, p);
 		this.files = new ArrayList<Tree>();
 	}
-	
-	public Tree extract(Path p) throws FileNotFoundException  {
+
+	public Tree extract(Path p) throws FileNotFoundException {
 		Path dummyPath = new Path(p.pComps);
 		return extractRec(dummyPath);
 	}
-	
+
 	public Tree extractRec(Path p) throws FileNotFoundException {
 		// Should not get here, if we're here then something went wrong
 		if (p.pComps.size() == 0) {
 			return this;
 		}
-		
+
 		String firstComp = p.pComps.get(0);
-		
+
 		if (p.pComps.size() == 1) {
-			for(Tree t : files) {
+			for (Tree t : files) {
 				if (t.getName().equals(firstComp)) {
 					return t;
 				}
 			}
-		}
-		else {
+		} else {
 			for (Tree t : this.files) {
 				if (t.getName().equals(firstComp) && t.isDirectory()) {
 					p.pComps.remove(0);
@@ -49,73 +51,78 @@ public class Node extends Tree {
 		// Did not find file/directory
 		throw new FileNotFoundException("Path does not refer to a file!");
 	}
-	
-	public boolean addRegistration(Path p, Command commandStub, Storage storageStub) {
+
+	public boolean addRegistration(Path p, Command commandStub,
+			Storage storageStub) {
 		if (p.isRoot()) {
 			return true;
 		}
 		Path dummyPath = new Path(p.pComps);
 		return addRec(dummyPath, commandStub, storageStub, new Path());
 	}
-	
-	public boolean addRec(Path p, Command commandStub, Storage storageStub, Path pathAcc) {
-		
-		// If there is no more components in the path then we have added it in the previous stage
+
+	public boolean addRec(Path p, Command commandStub, Storage storageStub,
+			Path pathAcc) {
+
+		// If there is no more components in the path then we have added it in
+		// the previous stage
 		// and thus we return true
 		if (p.pComps.size() == 0) {
 			return true;
 		}
-		
+
 		// Else we get the first component and add it to the accumulated path
 		String firstComp = p.pComps.get(0);
 		pathAcc.pComps.add(firstComp);
-		
+
 		if (p.pComps.size() == 1) {
 			for (Tree t : files) {
 				if (t.getName().equals(firstComp)) {
 					return false;
 				}
 			}
-			this.files.add(new Leaf(firstComp, pathAcc, storageStub, commandStub));
+			this.files.add(new Leaf(firstComp, pathAcc, storageStub,
+					commandStub));
 			return true;
-		} 
-		
+		}
+
 		// Search in the array for a leaf/node with name == to firstComp
 		for (Tree t : files) {
 			// If it's a node then recurse
 			if (t.getName().equals(firstComp) && t.isDirectory()) {
-				// Remove the first component in the path components, add it 
+				// Remove the first component in the path components, add it
 				// to the accumulated path and then recurse
 				p.pComps.remove(0);
 				return ((Node) t).addRec(p, commandStub, storageStub, pathAcc);
 			}
-			// If it's a file, return false immediately, this is a duplicate file
+			// If it's a file, return false immediately, this is a duplicate
+			// file
 			else if (t.getName().equals(firstComp) && !(t.isDirectory())) {
 				return false;
 			}
 		}
-		
 
-		// If it doesn't exist then you have to add it recursively and return true
+		// If it doesn't exist then you have to add it recursively and return
+		// true
 		// Case it's the last thing in the path, and is therefore a Leaf
-		
+
 		// Else it's not the last thing, and is therefore a Node
 		Node n = new Node(firstComp, pathAcc);
 		this.files.add(n);
 		p.pComps.remove(0);
-		
-		return n.addRec(p, commandStub, storageStub,pathAcc);
+
+		return n.addRec(p, commandStub, storageStub, pathAcc);
 	}
-	
+
 	@Override
-	public String toString(){
+	public String toString() {
 		String ret = "";
 		System.out.println("This is: " + this.getName());
-		
+
 		for (Tree t : files) {
 			System.out.println(t.getName());
 		}
-		
+
 		for (Tree t : files) {
 			if (t.isDirectory() == true) {
 				ret += t.getName() + "/" + t.toString();
@@ -129,5 +136,30 @@ public class Node extends Tree {
 	@Override
 	public boolean isDirectory() {
 		return true;
+	}
+
+	public Set<Storage> removeDir() throws InterruptedException {
+		Set<Storage> ss = new HashSet<Storage>();
+		for (Tree t : this.files) {
+			if (!t.isDirectory()) {
+				ss.add(((Leaf) t).getStorageStub());
+			} else {
+				Set<Storage> s1 = ((Node) t).removeDir();
+				ss.addAll(s1);
+			}
+		}
+		
+		return ss;
+	}
+
+	public boolean removeLeaf(Path path) {
+		String f = path.pComps.get(path.pComps.size()-1);
+		for (Tree t : files) {
+			if (t.getName().equals(f)) {
+				files.remove(t);
+				return true;
+			}
+		}
+		return false;
 	}
 }
